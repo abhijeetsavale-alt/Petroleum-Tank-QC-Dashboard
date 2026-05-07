@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Advance Petroleum Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,sans-serif;
+}
+
+body{
+    background:#06121f;
+    color:white;
+    overflow-x:hidden;
+}
+
+/* HEADER */
+
+.header{
+    background:linear-gradient(90deg,#081b2d,#0f2c47);
+    padding:20px;
+    border-bottom:2px solid #00bfff;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.logo{
+    font-size:30px;
+    font-weight:bold;
+    color:#ffb400;
+}
+
+.title{
+    font-size:26px;
+    font-weight:bold;
+    text-align:center;
+    color:white;
+    text-shadow:0 0 12px #00bfff;
+}
+
+.clock{
+    color:#8fd3ff;
+    font-size:18px;
+}
+
+/* KPI */
+
+.kpi-container{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:15px;
+    padding:20px;
+}
+
+.kpi{
+    background:#0c1f33;
+    border:1px solid #00bfff;
+    border-radius:15px;
+    padding:20px;
+    text-align:center;
+    box-shadow:0 0 15px rgba(0,191,255,0.2);
+}
+
+.kpi h3{
+    color:#8fd3ff;
+    margin-bottom:10px;
+}
+
+.kpi p{
+    font-size:28px;
+    font-weight:bold;
+}
+
+/* TANK GRID */
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:20px;
+    padding:20px;
+}
+
+.card{
+    background:#081826;
+    border:1px solid #00bfff;
+    border-radius:15px;
+    padding:20px;
+    transition:0.3s;
+    box-shadow:0 0 15px rgba(0,191,255,0.15);
+}
+
+.card:hover{
+    transform:translateY(-5px);
+    box-shadow:0 0 25px #00bfff;
+}
+
+.tank{
+    font-size:28px;
+    color:#ffb400;
+    margin-bottom:15px;
+    font-weight:bold;
+}
+
+.row{
+    display:flex;
+    justify-content:space-between;
+    padding:8px 0;
+    border-bottom:1px solid rgba(255,255,255,0.1);
+}
+
+.good{
+    color:#00ff88;
+    font-weight:bold;
+}
+
+.bad{
+    color:#ff4d4d;
+    font-weight:bold;
+}
+
+.status{
+    margin-top:15px;
+    text-align:center;
+    padding:10px;
+    border-radius:10px;
+    font-weight:bold;
+}
+
+.status.good{
+    background:#003b22;
+}
+
+.status.bad{
+    background:#4d0000;
+}
+
+/* CHART */
+
+.chart-box{
+    margin:20px;
+    background:#081826;
+    border-radius:15px;
+    border:1px solid #00bfff;
+    padding:20px;
+}
+
+canvas{
+    height:400px !important;
+}
+
+/* RESPONSIVE */
+
+@media(max-width:1100px){
+
+    .grid{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .kpi-container{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+}
+
+@media(max-width:700px){
+
+    .grid{
+        grid-template-columns:1fr;
+    }
+
+    .header{
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .title{
+        font-size:20px;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+    <div class="logo">
+        ADVANCE PETROLEUM
+    </div>
+
+    <div class="title">
+        PRODUCT TANK QUALITY MONITORING DASHBOARD
+    </div>
+
+    <div class="clock" id="clock"></div>
+
+</div>
+
+<!-- KPI -->
+
+<div class="kpi-container">
+
+    <div class="kpi">
+        <h3>Total Tanks</h3>
+        <p id="total">0</p>
+    </div>
+
+    <div class="kpi">
+        <h3>Healthy</h3>
+        <p id="healthy">0</p>
+    </div>
+
+    <div class="kpi">
+        <h3>Out Of Spec</h3>
+        <p id="bad">0</p>
+    </div>
+
+    <div class="kpi">
+        <h3>Avg Density</h3>
+        <p id="avgDensity">0</p>
+    </div>
+
+    <div class="kpi">
+        <h3>Avg Sulphur</h3>
+        <p id="avgSulphur">0</p>
+    </div>
+
+</div>
+
+<!-- CARDS -->
+
+<div class="grid" id="grid"></div>
+
+<!-- CHART -->
+
+<div class="chart-box">
+
+    <h2 style="margin-bottom:20px;color:#8fd3ff;">
+        Density Trend
+    </h2>
+
+    <canvas id="chart"></canvas>
+
+</div>
+
+<script>
+
+/* CLOCK */
+
+function updateClock(){
+
+    document.getElementById("clock").innerHTML =
+    new Date().toLocaleString();
+
+}
+
+setInterval(updateClock,1000);
+updateClock();
+
+/* GOOGLE SHEET CSV */
+
+const csvUrl =
+'https://docs.google.com/spreadsheets/d/e/2PACX-1vRFIeup4WP4MQh4zyOEi4QvjYq6b-j2jelIBfOCIiVSY5H5V_KIewWpTrrrk8Z0LSM6HvHJ7DhA_YJ-/pub?output=csv';
+
+/* LIMITS */
+
+const limits = {
+
+    densityMin:810,
+    densityMax:845,
+
+    flashMin:35,
+
+    recoveryMax:360,
+
+    viscosityMin:2,
+    viscosityMax:4.5,
+
+    sulphurMax:10
+
+};
+
+const tankList = [
+    "T05",
+    "T06",
+    "T07",
+    "T08",
+    "T011",
+    "T012"
+];
+
+/* CSV PARSER */
+
+function parseCSV(text){
+
+    const rows = [];
+    let row = [];
+    let current = '';
+    let insideQuotes = false;
+
+    for(let char of text){
+
+        if(char === '"'){
+            insideQuotes = !insideQuotes;
+        }
+
+        else if(char === ',' && !insideQuotes){
+            row.push(current);
+            current = '';
+        }
+
+        else if(char === '\n' && !insideQuotes){
+            row.push(current);
+            rows.push(row);
+
+            row = [];
+            current = '';
+        }
+
+        else{
+            current += char;
+        }
+    }
+
+    row.push(current);
+    rows.push(row);
+
+    return rows;
+
+}
+
+/* LOAD DATA */
+
+async function loadData(){
+
+    try{
+
+        const response = await fetch(
+            csvUrl + '&t=' + new Date().getTime()
+        );
+
+        const csvText = await response.text();
+
+        const rows = parseCSV(csvText);
+
+        const headers = rows[0].map(h =>
+            h.trim().toUpperCase()
+        );
+
+        const data = [];
+
+        for(let i=1;i<rows.length;i++){
+
+            const row = rows[i];
+
+            if(row.length < 2) continue;
+
+            const obj = {};
+
+            headers.forEach((h,index)=>{
+
+                obj[h] = row[index];
+
+            });
+
+            const tank =
+                obj['TANK @ MGT']?.trim();
+
+            if(tankList.includes(tank)){
+
+                data.push({
+
+                    tank:tank,
+
+                    receipt:
+                    obj['RECEIPT STARTED'] || '-',
+
+                    density:
+                    parseFloat(
+                        obj['DENSITY KG/M3']
+                    ) || 0,
+
+                    flash:
+                    parseFloat(
+                        obj['FLASH POINT C']
+                    ) || 0,
+
+                    recovery:
+                    parseFloat(
+                        obj['95% RECOVERY TEMPERATURE']
+                    ) || 0,
+
+                    viscosity:
+                    parseFloat(
+                        obj['VISCOSITY CS']
+                    ) || 0,
+
+                    sulphur:
+                    parseFloat(
+                        obj['SULPHUR PPM']
+                    ) || 0
+
+                });
+
+            }
+
+        }
+
+        renderDashboard(data);
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+        alert("Unable to fetch Google Sheet");
+
+    }
+
+}
+
+/* CHECK LIMIT */
+
+function inSpec(t){
+
+    return(
+
+        t.density >= limits.densityMin &&
+        t.density <= limits.densityMax &&
+
+        t.flash >= limits.flashMin &&
+
+        t.recovery <= limits.recoveryMax &&
+
+        t.viscosity >= limits.viscosityMin &&
+        t.viscosity <= limits.viscosityMax &&
+
+        t.sulphur <= limits.sulphurMax
+
+    );
+
+}
+
+/* RENDER */
+
+function renderDashboard(data){
+
+    const grid =
+    document.getElementById('grid');
+
+    grid.innerHTML = '';
+
+    let healthy = 0;
+    let bad = 0;
+
+    let densitySum = 0;
+    let sulphurSum = 0;
+
+    data.forEach(t=>{
+
+        const ok = inSpec(t);
+
+        if(ok) healthy++;
+        else bad++;
+
+        densitySum += t.density;
+        sulphurSum += t.sulphur;
+
+        const card = document.createElement('div');
+
+        card.className = 'card';
+
+        card.innerHTML = `
+
+        <div class="tank">${t.tank}</div>
+
+        <div class="row">
+            <span>Receipt Started</span>
+            <span>${t.receipt}</span>
+        </div>
+
+        <div class="row">
+            <span>Density</span>
+            <span class="${
+                t.density>=810 &&
+                t.density<=845
+                ? 'good':'bad'
+            }">
+                ${t.density}
+            </span>
+        </div>
+
+        <div class="row">
+            <span>Flash Point</span>
+            <span class="${
+                t.flash>=35
+                ? 'good':'bad'
+            }">
+                ${t.flash}
+            </span>
+        </div>
+
+        <div class="row">
+            <span>95% Recovery Temp</span>
+            <span class="${
+                t.recovery<=360
+                ? 'good':'bad'
+            }">
+                ${t.recovery}
+            </span>
+        </div>
+
+        <div class="row">
+            <span>Viscosity</span>
+            <span class="${
+                t.viscosity>=2 &&
+                t.viscosity<=4.5
+                ? 'good':'bad'
+            }">
+                ${t.viscosity}
+            </span>
+        </div>
+
+        <div class="row">
+            <span>Sulphur</span>
+            <span class="${
+                t.sulphur<=10
+                ? 'good':'bad'
+            }">
+                ${t.sulphur}
+            </span>
+        </div>
+
+        <div class="status ${ok?'good':'bad'}">
+
+            ${ok
+            ? 'IN SPEC'
+            : 'OUT OF SPEC'}
+
+        </div>
+
+        `;
+
+        grid.appendChild(card);
+
+    });
+
+    document.getElementById('total').innerHTML =
+    data.length;
+
+    document.getElementById('healthy').innerHTML =
+    healthy;
+
+    document.getElementById('bad').innerHTML =
+    bad;
+
+    document.getElementById('avgDensity').innerHTML =
+    (densitySum/data.length || 0).toFixed(1);
+
+    document.getElementById('avgSulphur').innerHTML =
+    (sulphurSum/data.length || 0).toFixed(1);
+
+    createChart(data);
+
+}
+
+/* CHART */
+
+let chart;
+
+function createChart(data){
+
+    const ctx =
+    document.getElementById('chart');
+
+    if(chart){
+        chart.destroy();
+    }
+
+    chart = new Chart(ctx,{
+
+        type:'line',
+
+        data:{
+
+            labels:data.map(d=>d.tank),
+
+            datasets:[{
+
+                label:'Density KG/M3',
+
+                data:data.map(d=>d.density),
+
+                borderColor:'#00bfff',
+
+                backgroundColor:'rgba(0,191,255,0.2)',
+
+                fill:true,
+
+                tension:0.4,
+
+                borderWidth:4,
+
+                pointRadius:5
+
+            }]
+
+        },
+
+        options:{
+
+            responsive:true,
+
+            plugins:{
+                legend:{
+                    labels:{
+                        color:'white'
+                    }
+                }
+            },
+
+            scales:{
+
+                x:{
+                    ticks:{
+                        color:'white'
+                    }
+                },
+
+                y:{
+                    ticks:{
+                        color:'white'
+                    }
+                }
+
+            }
+
+        }
+
+    });
+
+}
+
+/* INITIAL LOAD */
+
+loadData();
+
+/* AUTO REFRESH */
+
+setInterval(loadData,30000);
+
+</script>
+
+</body>
+</html>
