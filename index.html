@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Advance Petroleum Dashboard</title>
+<title>Advance Petroleum Industry Dashboard</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -34,6 +34,7 @@ body{
     display:flex;
     justify-content:space-between;
     align-items:center;
+    flex-wrap:wrap;
 }
 
 .logo{
@@ -45,9 +46,9 @@ body{
 .title{
     font-size:26px;
     font-weight:bold;
-    text-align:center;
     color:white;
     text-shadow:0 0 12px #00bfff;
+    text-align:center;
 }
 
 .clock{
@@ -197,6 +198,8 @@ canvas{
 
 <body>
 
+<!-- HEADER -->
+
 <div class="header">
 
     <div class="logo">
@@ -242,20 +245,45 @@ canvas{
 
 </div>
 
-<!-- CARDS -->
+<!-- TANK CARDS -->
 
 <div class="grid" id="grid"></div>
 
-<!-- CHART -->
+<!-- CHARTS -->
 
 <div class="chart-box">
-
     <h2 style="margin-bottom:20px;color:#8fd3ff;">
         Density Trend
     </h2>
+    <canvas id="densityChart"></canvas>
+</div>
 
-    <canvas id="chart"></canvas>
+<div class="chart-box">
+    <h2 style="margin-bottom:20px;color:#8fd3ff;">
+        Flash Point Trend
+    </h2>
+    <canvas id="flashChart"></canvas>
+</div>
 
+<div class="chart-box">
+    <h2 style="margin-bottom:20px;color:#8fd3ff;">
+        95% Recovery Temperature Trend
+    </h2>
+    <canvas id="recoveryChart"></canvas>
+</div>
+
+<div class="chart-box">
+    <h2 style="margin-bottom:20px;color:#8fd3ff;">
+        Viscosity Trend
+    </h2>
+    <canvas id="viscosityChart"></canvas>
+</div>
+
+<div class="chart-box">
+    <h2 style="margin-bottom:20px;color:#8fd3ff;">
+        Sulphur Trend
+    </h2>
+    <canvas id="sulphurChart"></canvas>
 </div>
 
 <script>
@@ -270,9 +298,10 @@ function updateClock(){
 }
 
 setInterval(updateClock,1000);
+
 updateClock();
 
-/* GOOGLE SHEET CSV */
+/* GOOGLE SHEET */
 
 const csvUrl =
 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRFIeup4WP4MQh4zyOEi4QvjYq6b-j2jelIBfOCIiVSY5H5V_KIewWpTrrrk8Z0LSM6HvHJ7DhA_YJ-/pub?output=csv';
@@ -320,21 +349,28 @@ function parseCSV(text){
         }
 
         else if(char === ',' && !insideQuotes){
+
             row.push(current);
             current = '';
+
         }
 
         else if(char === '\n' && !insideQuotes){
+
             row.push(current);
             rows.push(row);
 
             row = [];
             current = '';
+
         }
 
         else{
+
             current += char;
+
         }
+
     }
 
     row.push(current);
@@ -423,6 +459,8 @@ async function loadData(){
 
         renderDashboard(data);
 
+        createCharts(data);
+
     }
 
     catch(error){
@@ -435,7 +473,7 @@ async function loadData(){
 
 }
 
-/* CHECK LIMIT */
+/* SPEC CHECK */
 
 function inSpec(t){
 
@@ -457,7 +495,7 @@ function inSpec(t){
 
 }
 
-/* RENDER */
+/* DASHBOARD */
 
 function renderDashboard(data){
 
@@ -496,7 +534,7 @@ function renderDashboard(data){
         </div>
 
         <div class="row">
-            <span>Density</span>
+            <span>Density KG/M3</span>
             <span class="${
                 t.density>=810 &&
                 t.density<=845
@@ -507,7 +545,7 @@ function renderDashboard(data){
         </div>
 
         <div class="row">
-            <span>Flash Point</span>
+            <span>Flash Point °C</span>
             <span class="${
                 t.flash>=35
                 ? 'good':'bad'
@@ -517,7 +555,7 @@ function renderDashboard(data){
         </div>
 
         <div class="row">
-            <span>95% Recovery Temp</span>
+            <span>95% Recovery Temp °C</span>
             <span class="${
                 t.recovery<=360
                 ? 'good':'bad'
@@ -527,7 +565,7 @@ function renderDashboard(data){
         </div>
 
         <div class="row">
-            <span>Viscosity</span>
+            <span>Viscosity CS</span>
             <span class="${
                 t.viscosity>=2 &&
                 t.viscosity<=4.5
@@ -538,7 +576,7 @@ function renderDashboard(data){
         </div>
 
         <div class="row">
-            <span>Sulphur</span>
+            <span>Sulphur PPM</span>
             <span class="${
                 t.sulphur<=10
                 ? 'good':'bad'
@@ -550,8 +588,8 @@ function renderDashboard(data){
         <div class="status ${ok?'good':'bad'}">
 
             ${ok
-            ? 'IN SPEC'
-            : 'OUT OF SPEC'}
+            ? 'IN SPECIFICATION'
+            : 'OUT OF SPECIFICATION'}
 
         </div>
 
@@ -576,48 +614,109 @@ function renderDashboard(data){
     document.getElementById('avgSulphur').innerHTML =
     (sulphurSum/data.length || 0).toFixed(1);
 
-    createChart(data);
+}
+
+/* CHARTS */
+
+let densityChart;
+let flashChart;
+let recoveryChart;
+let viscosityChart;
+let sulphurChart;
+
+function createCharts(data){
+
+    const labels = data.map(d =>
+        d.receipt || d.tank
+    );
+
+    if(densityChart) densityChart.destroy();
+    if(flashChart) flashChart.destroy();
+    if(recoveryChart) recoveryChart.destroy();
+    if(viscosityChart) viscosityChart.destroy();
+    if(sulphurChart) sulphurChart.destroy();
+
+    densityChart = new Chart(
+        document.getElementById('densityChart'),
+        chartConfig(
+            labels,
+            data.map(d=>d.density),
+            'Density KG/M3',
+            '#00bfff'
+        )
+    );
+
+    flashChart = new Chart(
+        document.getElementById('flashChart'),
+        chartConfig(
+            labels,
+            data.map(d=>d.flash),
+            'Flash Point °C',
+            '#ffb400'
+        )
+    );
+
+    recoveryChart = new Chart(
+        document.getElementById('recoveryChart'),
+        chartConfig(
+            labels,
+            data.map(d=>d.recovery),
+            '95% Recovery Temp °C',
+            '#00ff88'
+        )
+    );
+
+    viscosityChart = new Chart(
+        document.getElementById('viscosityChart'),
+        chartConfig(
+            labels,
+            data.map(d=>d.viscosity),
+            'Viscosity CS',
+            '#ff4d4d'
+        )
+    );
+
+    sulphurChart = new Chart(
+        document.getElementById('sulphurChart'),
+        chartConfig(
+            labels,
+            data.map(d=>d.sulphur),
+            'Sulphur PPM',
+            '#9b59b6'
+        )
+    );
 
 }
 
-/* CHART */
+/* COMMON CHART */
 
-let chart;
+function chartConfig(labels,data,label,color){
 
-function createChart(data){
-
-    const ctx =
-    document.getElementById('chart');
-
-    if(chart){
-        chart.destroy();
-    }
-
-    chart = new Chart(ctx,{
+    return{
 
         type:'line',
 
         data:{
 
-            labels:data.map(d=>d.tank),
+            labels:labels,
 
             datasets:[{
 
-                label:'Density KG/M3',
+                label:label,
 
-                data:data.map(d=>d.density),
+                data:data,
 
-                borderColor:'#00bfff',
+                borderColor:color,
 
-                backgroundColor:'rgba(0,191,255,0.2)',
+                backgroundColor:color + '33',
 
                 fill:true,
 
                 tension:0.4,
 
-                borderWidth:4,
+                borderWidth:3,
 
-                pointRadius:5
+                pointRadius:4
 
             }]
 
@@ -628,11 +727,13 @@ function createChart(data){
             responsive:true,
 
             plugins:{
+
                 legend:{
                     labels:{
                         color:'white'
                     }
                 }
+
             },
 
             scales:{
@@ -640,12 +741,18 @@ function createChart(data){
                 x:{
                     ticks:{
                         color:'white'
+                    },
+                    grid:{
+                        color:'rgba(255,255,255,0.1)'
                     }
                 },
 
                 y:{
                     ticks:{
                         color:'white'
+                    },
+                    grid:{
+                        color:'rgba(255,255,255,0.1)'
                     }
                 }
 
@@ -653,7 +760,7 @@ function createChart(data){
 
         }
 
-    });
+    };
 
 }
 
