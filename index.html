@@ -267,7 +267,7 @@ canvas{
 
 <div class="chart-box">
     <h2 style="margin-bottom:20px;color:#8fd3ff;">
-        95% Recovery Temperature Trend
+        Recovery Temperature Trend
     </h2>
     <canvas id="recoveryChart"></canvas>
 </div>
@@ -288,6 +288,12 @@ canvas{
 
 <script>
 
+/* GLOBAL ERROR */
+
+window.addEventListener('error', function(e){
+    console.error("Global Error:", e.message);
+});
+
 /* CLOCK */
 
 function updateClock(){
@@ -301,7 +307,7 @@ setInterval(updateClock,1000);
 
 updateClock();
 
-/* GOOGLE SHEET */
+/* GOOGLE SHEET CSV */
 
 const csvUrl =
 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRFIeup4WP4MQh4zyOEi4QvjYq6b-j2jelIBfOCIiVSY5H5V_KIewWpTrrrk8Z0LSM6HvHJ7DhA_YJ-/pub?output=csv';
@@ -337,12 +343,14 @@ const tankList = [
 
 function parseCSV(text){
 
+    const cleanText = text.replace(/\r/g,'');
+
     const rows = [];
     let row = [];
     let current = '';
     let insideQuotes = false;
 
-    for(let char of text){
+    for(let char of cleanText){
 
         if(char === '"'){
             insideQuotes = !insideQuotes;
@@ -350,15 +358,18 @@ function parseCSV(text){
 
         else if(char === ',' && !insideQuotes){
 
-            row.push(current);
+            row.push(current.trim());
             current = '';
 
         }
 
         else if(char === '\n' && !insideQuotes){
 
-            row.push(current);
-            rows.push(row);
+            row.push(current.trim());
+
+            if(row.length > 1){
+                rows.push(row);
+            }
 
             row = [];
             current = '';
@@ -373,8 +384,12 @@ function parseCSV(text){
 
     }
 
-    row.push(current);
-    rows.push(row);
+    if(current.length){
+
+        row.push(current.trim());
+        rows.push(row);
+
+    }
 
     return rows;
 
@@ -394,8 +409,12 @@ async function loadData(){
 
         const rows = parseCSV(csvText);
 
+        if(!rows.length || !rows[0]){
+            throw new Error("CSV data empty");
+        }
+
         const headers = rows[0].map(h =>
-            h.trim().toUpperCase()
+            String(h).trim().toUpperCase()
         );
 
         const data = [];
@@ -535,52 +554,35 @@ function renderDashboard(data){
 
         <div class="row">
             <span>Density KG/M3</span>
-            <span class="${
-                t.density>=810 &&
-                t.density<=845
-                ? 'good':'bad'
-            }">
+            <span class="${t.density>=810 && t.density<=845 ? 'good':'bad'}">
                 ${t.density}
             </span>
         </div>
 
         <div class="row">
             <span>Flash Point °C</span>
-            <span class="${
-                t.flash>=35
-                ? 'good':'bad'
-            }">
+            <span class="${t.flash>=35 ? 'good':'bad'}">
                 ${t.flash}
             </span>
         </div>
 
         <div class="row">
             <span>95% Recovery Temp °C</span>
-            <span class="${
-                t.recovery<=360
-                ? 'good':'bad'
-            }">
+            <span class="${t.recovery<=360 ? 'good':'bad'}">
                 ${t.recovery}
             </span>
         </div>
 
         <div class="row">
             <span>Viscosity CS</span>
-            <span class="${
-                t.viscosity>=2 &&
-                t.viscosity<=4.5
-                ? 'good':'bad'
-            }">
+            <span class="${t.viscosity>=2 && t.viscosity<=4.5 ? 'good':'bad'}">
                 ${t.viscosity}
             </span>
         </div>
 
         <div class="row">
             <span>Sulphur PPM</span>
-            <span class="${
-                t.sulphur<=10
-                ? 'good':'bad'
-            }">
+            <span class="${t.sulphur<=10 ? 'good':'bad'}">
                 ${t.sulphur}
             </span>
         </div>
@@ -626,9 +628,7 @@ let sulphurChart;
 
 function createCharts(data){
 
-    const labels = data.map(d =>
-        d.receipt || d.tank
-    );
+    const labels = data.map(d => d.tank);
 
     if(densityChart) densityChart.destroy();
     if(flashChart) flashChart.destroy();
@@ -638,57 +638,30 @@ function createCharts(data){
 
     densityChart = new Chart(
         document.getElementById('densityChart'),
-        chartConfig(
-            labels,
-            data.map(d=>d.density),
-            'Density KG/M3',
-            '#00bfff'
-        )
+        chartConfig(labels,data.map(d=>d.density),'Density','#00bfff')
     );
 
     flashChart = new Chart(
         document.getElementById('flashChart'),
-        chartConfig(
-            labels,
-            data.map(d=>d.flash),
-            'Flash Point °C',
-            '#ffb400'
-        )
+        chartConfig(labels,data.map(d=>d.flash),'Flash Point','#ffb400')
     );
 
     recoveryChart = new Chart(
         document.getElementById('recoveryChart'),
-        chartConfig(
-            labels,
-            data.map(d=>d.recovery),
-            '95% Recovery Temp °C',
-            '#00ff88'
-        )
+        chartConfig(labels,data.map(d=>d.recovery),'Recovery','#00ff88')
     );
 
     viscosityChart = new Chart(
         document.getElementById('viscosityChart'),
-        chartConfig(
-            labels,
-            data.map(d=>d.viscosity),
-            'Viscosity CS',
-            '#ff4d4d'
-        )
+        chartConfig(labels,data.map(d=>d.viscosity),'Viscosity','#ff4d4d')
     );
 
     sulphurChart = new Chart(
         document.getElementById('sulphurChart'),
-        chartConfig(
-            labels,
-            data.map(d=>d.sulphur),
-            'Sulphur PPM',
-            '#9b59b6'
-        )
+        chartConfig(labels,data.map(d=>d.sulphur),'Sulphur','#9b59b6')
     );
 
 }
-
-/* COMMON CHART */
 
 function chartConfig(labels,data,label,color){
 
@@ -703,19 +676,12 @@ function chartConfig(labels,data,label,color){
             datasets:[{
 
                 label:label,
-
                 data:data,
-
                 borderColor:color,
-
                 backgroundColor:color + '33',
-
                 fill:true,
-
                 tension:0.4,
-
                 borderWidth:3,
-
                 pointRadius:4
 
             }]
